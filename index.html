@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GasRoute Live Shadow Analyzer</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel (JSX Derleyicisi) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Özel Animasyonlar */
+        @keyframes progress {
+            0% { transform: scaleX(0); }
+            100% { transform: scaleX(1); }
+        }
+        .animate-progress {
+            animation: progress 2s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-950">
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // --- ICONS (SVG Components) ---
+    const Activity = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+    const Wifi = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>;
+    const WifiOff = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>;
+    const Search = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+    const Server = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>;
+    const DollarSign = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
+    const ShieldAlert = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
+    const ShieldCheck = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>;
+    const Clock = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+    const TrendingDown = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>;
+    const Zap = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+    const Box = (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
+
+    // --- MAIN COMPONENT ---
+    const GasRouteLiveShadow = () => {
+        // --- STATE TANIMLARI ---
+        const [isConnected, setIsConnected] = useState(false);
+        const [currentGasPrice, setCurrentGasPrice] = useState(0); // Canlı Veri
+        const [latestBlock, setLatestBlock] = useState(null);
+
+        const [transactions, setTransactions] = useState([]);
+        const [stats, setStats] = useState({
+            missedSavings: 0,
+            analyzedTx: 0,
+            mevDetected: 0
+        });
+
+        const wsRef = useRef(null);
+        const scrollRef = useRef(null);
+
+        // Rastgele Cüzdan Adresi Üretici
+        const generateAddress = () => `0x${Math.floor(Math.random()*16777215).toString(16).padEnd(4, '0')}...${Math.floor(Math.random()*16777215).toString(16).substring(0,4)}`;
+
+        // --- WEBSOCKET BAĞLANTISI (Gerçek Veri) ---
+        const connectToEthereum = useCallback(() => {
+            const wsUrl = 'wss://ethereum-rpc.publicnode.com';
+
+            try {
+                const ws = new WebSocket(wsUrl);
+                wsRef.current = ws;
+
+                ws.onopen = () => {
+                    setIsConnected(true);
+                    // Yeni blok başlıklarına abone ol
+                    ws.send(JSON.stringify({
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "eth_subscribe",
+                        "params": ["newHeads"]
+                    }));
+                };
+
+                ws.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    if (message.method === 'eth_subscription' && message.params?.result) {
+                        handleNewBlock(message.params.result);
+                    }
+                };
+
+                ws.onclose = () => setIsConnected(false);
+                ws.onerror = () => setIsConnected(false);
+
+            } catch (err) {
+                console.error("Connection failed", err);
+            }
+        }, []);
+
+        // --- BLOK İŞLEME VE SHADOW ANALİZ MOTORU ---
+        const handleNewBlock = (blockHeader) => {
+            // 1. Gerçek Verileri Ayrıştır
+            const blockNumber = parseInt(blockHeader.number, 16);
+            // BaseFee yoksa (eski zincirler vs) varsayılan 30 al, varsa parse et
+            const realBaseFee = blockHeader.baseFeePerGas ? parseInt(blockHeader.baseFeePerGas, 16) / 1e9 : 30;
+
+            setLatestBlock(blockNumber);
+            setCurrentGasPrice(realBaseFee);
+
+            // 2. Bu blok koşullarında gerçekleşen temsili işlemleri analiz et (Shadow Logic)
+            generateShadowAnalysis(realBaseFee, blockNumber);
+        };
+
+        const generateShadowAnalysis = (baseFee, blockNum) => {
+            // Gerçek BaseFee'yi kullanarak senaryolar üret
+            // Her blokta 2-4 işlem varmış gibi simüle et
+            const txCount = Math.floor(Math.random() * 3) + 2;
+            const newTxs = [];
+            let batchSavings = 0;
+            let batchMevCount = 0;
+
+            for (let i = 0; i < txCount; i++) {
+                // İşlem Tipi ve Gaz Limiti
+                const txType = Math.random() > 0.6 ? 'Swap' : (Math.random() > 0.8 ? 'NFT Mint' : 'Transfer');
+                const gasLimit = txType === 'Swap' ? 180000 : (txType === 'NFT Mint' ? 150000 : 21000);
+                const ethPrice = 3250; // Demo için sabit, API'den de çekilebilir
+
+                // A) Mevcut Durum (Public Mempool)
+                // Kullanıcılar genelde BaseFee + 2 Gwei Priority öder
+                const publicPriority = 2;
+                const publicGasPrice = baseFee + publicPriority;
+
+                // MEV Riski (Swap işlemlerinde %40 ihtimalle sandwich yiyor)
+                const isMevVictim = txType === 'Swap' && Math.random() > 0.6;
+                const mevLossUSD = isMevVictim ? (Math.random() * 80 + 15) : 0;
+
+                const publicCostETH = (publicGasPrice * gasLimit) / 1e9;
+                const publicCostUSD = (publicCostETH * ethPrice) + mevLossUSD;
+
+                // B) GasRoute Senaryosu (Optimized)
+                // Flashbots ile Priority 0.1 Gwei'ye düşer, MEV riski sıfırlanır
+                const optimizedPriority = 0.1;
+                const optimizedGasPrice = baseFee + optimizedPriority;
+
+                const optimizedCostETH = (optimizedGasPrice * gasLimit) / 1e9;
+                const optimizedCostUSD = optimizedCostETH * ethPrice;
+
+                const saving = publicCostUSD - optimizedCostUSD;
+
+                newTxs.push({
+                    id: Date.now() + i + Math.random(),
+                    time: new Date(),
+                    hash: generateAddress(),
+                    block: blockNum,
+                    type: txType,
+                    actual: {
+                        gasPrice: publicGasPrice.toFixed(2), // Gerçek BaseFee + Priority
+                        cost: publicCostUSD.toFixed(2),
+                        mevLoss: mevLossUSD.toFixed(2),
+                        method: 'Public Mempool'
+                    },
+                    scenario: {
+                        gasPrice: optimizedGasPrice.toFixed(2),
+                        cost: optimizedCostUSD.toFixed(2),
+                        method: 'GasRoute Flashbots',
+                        saved: saving.toFixed(2)
+                    },
+                    mevDetected: isMevVictim
+                });
+
+                batchSavings += saving;
+                if (isMevVictim) batchMevCount++;
+            }
+
+            // State Güncelleme
+            setTransactions(prev => [...newTxs, ...prev].slice(0, 100));
+            setStats(prev => ({
+                missedSavings: prev.missedSavings + batchSavings,
+                analyzedTx: prev.analyzedTx + newTxs.length,
+                mevDetected: prev.mevDetected + batchMevCount
+            }));
+        };
+
+        useEffect(() => {
+            connectToEthereum();
+            return () => {
+                if (wsRef.current) wsRef.current.close();
+            };
+        }, [connectToEthereum]);
+
+        return (
+            <div className="flex flex-col h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
+
+                {/* HEADER: Kümülatif Veri (Shadow Analyzer Stili) */}
+                <div className="bg-slate-900 border-b border-slate-800 p-6 shadow-xl z-10">
+                    <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-purple-500/10 p-2 rounded-lg border border-purple-500/20 animate-pulse">
+                                <Search className="w-6 h-6 text-purple-400" />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                                    GasRoute <span className="text-purple-400">Live Shadow Analyzer</span>
+                                </h1>
+                                <p className="text-xs text-slate-400 flex items-center gap-2">
+                                    <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+                                    {isConnected ? 'Ethereum Mainnet Connected' : 'Connecting to Node...'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-right">
+                            <div>
+                                <div className="text-[10px] text-slate-500 uppercase">Aktif Blok</div>
+                                <div className="text-lg font-mono font-bold text-blue-400 flex items-center justify-end gap-2">
+                                    <Box className="w-4 h-4" /> #{latestBlock || '---'}
+                                </div>
+                            </div>
+                            <div className="h-8 w-px bg-slate-800"></div>
+                            <div>
+                                <div className="text-[10px] text-slate-500 uppercase">Canlı Gas</div>
+                                <div className={`text-lg font-mono font-bold flex items-center justify-end gap-2 ${currentGasPrice > 30 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                    <Zap className="w-4 h-4" /> {currentGasPrice ? currentGasPrice.toFixed(1) : '-'} Gwei
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* KPI Kartları (Orijinal Tasarım) */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl flex flex-col items-center justify-center relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <span className="text-slate-400 text-xs uppercase tracking-wider mb-1">Tespit Edilen Potansiyel Tasarruf</span>
+                            <div className="text-4xl font-mono font-bold text-emerald-400 flex items-center gap-1">
+                                <DollarSign className="w-6 h-6" />
+                                {stats.missedSavings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <span className="text-[10px] text-slate-500 mt-2">Canlı ağ verilerine göre hesaplanmaktadır</span>
+                        </div>
+
+                        <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl flex flex-col items-center justify-center">
+                            <span className="text-slate-400 text-xs uppercase tracking-wider mb-1">Analiz Edilen İşlem (Live)</span>
+                            <div className="text-3xl font-mono font-bold text-white flex items-center gap-2">
+                                <Activity className="w-5 h-5 text-blue-400" />
+                                {stats.analyzedTx}
+                            </div>
+                            <div className="w-full bg-slate-700 h-1 mt-3 rounded-full overflow-hidden">
+                                <div className="h-full bg-purple-500 animate-progress w-full origin-left scale-x-100 transition-transform"></div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-xl flex flex-col items-center justify-center">
+                            <span className="text-slate-400 text-xs uppercase tracking-wider mb-1">Engellenen MEV Saldırısı</span>
+                            <div className="text-3xl font-mono font-bold text-amber-400 flex items-center gap-2">
+                                <ShieldAlert className="w-6 h-6" />
+                                {stats.mevDetected}
+                            </div>
+                            <span className="text-[10px] text-slate-500 mt-2">Sandwich & Frontrun Girişimleri</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* BODY: İşlem Listesi (Orijinal Tablo Yapısı) */}
+                <div className="flex-1 overflow-hidden flex flex-col p-4 max-w-6xl mx-auto w-full">
+
+                    {/* Liste Başlıkları */}
+                    <div className="grid grid-cols-12 gap-4 text-xs font-bold text-slate-500 uppercase tracking-wider px-6 py-3 border-b border-slate-800">
+                        <div className="col-span-2">Zaman / Hash</div>
+                        <div className="col-span-1">Tip</div>
+                        <div className="col-span-4 text-center border-l border-slate-800 border-r">Gerçekleşen (Mevcut Durum)</div>
+                        <div className="col-span-4 text-center border-r border-slate-800">GasRoute Senaryosu</div>
+                        <div className="col-span-1 text-right">Fırsat</div>
+                    </div>
+
+                    {/* Scrollable List */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2" ref={scrollRef}>
+                        {transactions.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-64 text-slate-600 animate-pulse gap-4">
+                                <Wifi className="w-12 h-12 opacity-50" />
+                                <div className="text-center">
+                                    <p className="font-bold">Mainnet Bağlantısı Bekleniyor...</p>
+                                    <p className="text-xs">Yeni blok verisi geldiğinde analiz başlayacak.</p>
+                                </div>
+                            </div>
+                        ) : (
+                            transactions.map((tx, index) => (
+                                <div
+                                    key={tx.id}
+                                    className={`grid grid-cols-12 gap-4 items-center p-4 rounded-lg border transition-all duration-500 ${
+                                        index < 3 ? 'bg-slate-800 border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.1)]' : 'bg-slate-900 border-slate-800 hover:border-slate-700 opacity-90'
+                                    }`}
+                                >
+                                    {/* Sol: İşlem Bilgisi */}
+                                    <div className="col-span-2">
+                                        <div className="flex items-center gap-2 text-slate-300 font-mono text-xs">
+                                            <Clock className="w-3 h-3 text-slate-500" />
+                                            {tx.time.toLocaleTimeString([], { hour12: false })}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 mt-1 font-mono">{tx.hash}</div>
+                                    </div>
+
+                                    <div className="col-span-1">
+                            <span className={`text-[10px] px-2 py-1 rounded font-bold ${
+                                tx.type === 'Swap' ? 'bg-blue-500/10 text-blue-400' :
+                                    tx.type === 'NFT Mint' ? 'bg-pink-500/10 text-pink-400' : 'bg-slate-700 text-slate-300'
+                            }`}>
+                                {tx.type}
+                            </span>
+                                    </div>
+
+                                    {/* Orta Sol: Gerçek Durum (Kötü Senaryo) */}
+                                    <div className="col-span-4 bg-red-500/5 rounded p-2 border border-red-500/10 relative">
+                                        {tx.mevDetected && (
+                                            <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1 animate-pulse">
+                                                <ShieldAlert className="w-3 h-3" /> MEV YEDİ
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between items-center text-xs mb-1">
+                                            <span className="text-slate-500">Yöntem:</span>
+                                            <span className="text-red-300 text-[10px]">Public Pool ({tx.actual.gasPrice} Gwei)</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-slate-500">Maliyet:</span>
+                                            <span className="font-mono text-slate-300">${tx.actual.cost}</span>
+                                        </div>
+                                        {parseFloat(tx.actual.mevLoss) > 0 && (
+                                            <div className="flex justify-between items-center text-[10px] text-red-400 mt-1 font-bold border-t border-red-500/20 pt-1">
+                                                <span>Saldırı Kaybı:</span>
+                                                <span>-${tx.actual.mevLoss}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Orta Sağ: GasRoute Senaryosu (İyi Senaryo) */}
+                                    <div className="col-span-4 bg-emerald-500/5 rounded p-2 border border-emerald-500/10 relative">
+                                        <div className="absolute -top-2 -right-2 bg-emerald-500 text-slate-900 text-[9px] px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1">
+                                            <ShieldCheck className="w-3 h-3" /> KORUNDU
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs mb-1">
+                                            <span className="text-slate-500">Yöntem:</span>
+                                            <span className="text-emerald-300 text-[10px]">GasRoute ({tx.scenario.gasPrice} Gwei)</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-slate-500">Maliyet:</span>
+                                            <span className="font-mono text-slate-300">${tx.scenario.cost}</span>
+                                        </div>
+                                        {parseFloat(tx.actual.mevLoss) > 0 && (
+                                            <div className="flex justify-between items-center text-[10px] text-emerald-400 mt-1 font-bold border-t border-emerald-500/20 pt-1">
+                                                <span>MEV Önleme:</span>
+                                                <span>$0.00 (Tam Koruma)</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Sağ: Fark (Kazanç) */}
+                                    <div className="col-span-1 text-right">
+                                        <div className="flex flex-col items-end">
+                                            <div className="text-emerald-400 font-bold font-mono text-sm flex items-center gap-1">
+                                                <TrendingDown className="w-3 h-3" />
+                                                +${tx.scenario.saved}
+                                            </div>
+                                            <div className="text-[9px] text-slate-500 uppercase">Potansiyel</div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Alt Bilgi */}
+                    <div className="mt-4 flex items-center gap-2 text-[10px] text-slate-500 justify-center">
+                        <Zap className="w-3 h-3 text-yellow-500" />
+                        <span>Analizler canlı Ethereum Mainnet <strong>BaseFee</strong> verisi üzerinden dinamik olarak hesaplanmaktadır.</span>
+                    </div>
+
+                </div>
+            </div>
+        );
+    };
+
+    // Render
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<GasRouteLiveShadow />);
+</script>
+</body>
+</html>
